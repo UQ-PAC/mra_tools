@@ -187,7 +187,7 @@ def readDiagram(d, nm):
         print ("Missing opcode bits for " + nm + ": " + mask)
         exit(1)
 
-    guard = "cond != '1111'" if "cond" in fields else "TRUE"
+    guard = "cond != '1111'" if isa != "A64" and "cond" in fields else "TRUE"
 
     return (isa, mask, unpreds, fields, guard)
 
