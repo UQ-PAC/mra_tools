@@ -256,11 +256,22 @@ def main():
                                 if nm not in slices: slices[nm] = []
                                 slices[nm].append((msb,lsb,slice))
                             elif isident:
-                                fields[nm] = [(msb,lsb)]
+                                if f.find('field_rangesets') is not None:
+                                    if nm not in fields: fields[nm] = []
+                                    for rs in f.findall('field_rangesets/field_rangeset'):
+                                        msb = rs.find('field_msb').text
+                                        lsb = rs.find('field_lsb').text
+                                        fields[nm].append((msb, lsb))
+                                else:
+                                    fields[nm] = [(msb,lsb)]
                             else:
                                 # print(name,nm)
                                 pass
+
                     for f in slices.keys():
+                        # If another field element gave a rangeset then we don't need name-based slices
+                        if f in fields: continue
+
                         ss = slices[f]
                         ss.sort(key=lambda s: int(s[2][0]))
                         ss = [ (msb,lsb) for (msb,lsb,slice) in reversed(ss) ]
