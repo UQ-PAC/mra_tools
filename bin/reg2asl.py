@@ -23,7 +23,6 @@ regs32 = [
     "CCSIDR2_EL1",
     "CCSIDR_EL1",
     "CNTFRQ_EL0",
-    "CNTHCTL_EL2",
     "CNTHPS_CTL_EL2",
     "CNTHPS_TVAL_EL2",
     "CNTHP_CTL_EL2",
@@ -32,7 +31,6 @@ regs32 = [
     "CNTHVS_TVAL_EL2",
     "CNTHV_CTL_EL2",
     "CNTHV_TVAL_EL2",
-    "CNTKCTL_EL1",
     "CNTPS_CTL_EL1",
     "CNTPS_TVAL_EL1",
     "CNTP_CTL_EL0",
@@ -41,11 +39,8 @@ regs32 = [
     "CNTV_TVAL_EL0",
     "CONTEXTIDR_EL1",
     "CONTEXTIDR_EL2",
-    "CPACR_EL1",
-    "CPTR_EL2",
     "CPTR_EL3",
     "CSSELR_EL1",
-    "CTR_EL0",
     "CURRENTEL",
     "DACR32_EL2",
     "DAIF",
@@ -53,19 +48,11 @@ regs32 = [
     "DBGBCRN_EL1",
     "DBGCLAIMCLR_EL1",
     "DBGCLAIMSET_EL1",
-    "DBGDTRRX_EL0",
-    "DBGDTRTX_EL0",
     "DBGPRCR_EL1",
     "DBGVCR32_EL2",
     "DBGWCRN_EL1",
     "DCZID_EL0",
     "DIT",
-    "DSPSR_EL0",
-    "ESR_EL0",
-    "ESR_EL1",
-    "ESR_EL2",
-    "ESR_EL3",
-    "FPCR",
     "FPEXC32_EL2",
     "FPSR",
     "HACR_EL2",
@@ -136,8 +123,6 @@ regs32 = [
     "ISR_EL1",
     "MDCCINT_EL1",
     "MDCCSR_EL0",
-    "MDCR_EL2",
-    "MDCR_EL3",
     "MDSCR_EL1",
     "MIDR_EL1",
     "MVFR0_EL1",
@@ -154,7 +139,6 @@ regs32 = [
     "PMCCFILTR_EL0",
     "PMCNTENCLR_EL0",
     "PMCNTENSET_EL0",
-    "PMCR_EL0",
     "PMEVCNTRN_EL0",
     "PMEVTYPERN_EL0",
     "PMINTENCLR_EL1",
@@ -167,7 +151,6 @@ regs32 = [
     "PMXEVCNTR_EL0",
     "PMXEVTYPER_EL0",
     "REVIDR_EL1",
-    "RGSR_EL1",
     "RMR_EL1",
     "RMR_EL2",
     "RMR_EL3",
@@ -175,6 +158,28 @@ regs32 = [
     "SDER32_EL2",
     "SDER32_EL3",
     "SPSEL",
+    "SSBS",
+    "UAO",
+    "VPIDR_EL2",
+    ]
+olderregs32 = [
+    "CNTHCTL_EL2",
+    "CNTKCTL_EL1",
+    "CPACR_EL1",
+    "CPTR_EL2",
+    "CTR_EL0",
+    "DBGDTRRX_EL0",
+    "DBGDTRTX_EL0",
+    "DSPSR_EL0",
+    "ESR_EL0",
+    "ESR_EL1",
+    "ESR_EL2",
+    "ESR_EL3",
+    "FPCR",
+    "MDCR_EL2",
+    "MDCR_EL3",
+    "PMCR_EL0",
+    "RGSR_EL1",
     "SPSR_abt",
     "SPSR_EL0",
     "SPSR_EL1",
@@ -183,12 +188,14 @@ regs32 = [
     "SPSR_fiq",
     "SPSR_irq",
     "SPSR_und",
-    "SSBS",
     "TCR_EL3",
-    "UAO",
-    "VPIDR_EL2",
     "VSTCR_EL2",
-    "VTCR_EL2"
+    "VTCR_EL2",
+    # Morello
+    "CCTLR_EL0",
+    "CCTLR_EL1",
+    "CCTLR_EL2",
+    "CCTLR_EL3",
     ]
 
 def main():
@@ -199,7 +206,12 @@ def main():
                         metavar='FILE', default='output')
     parser.add_argument('dir', metavar='<dir>',  nargs='+',
                         help='input directory')
+    parser.add_argument('--older32', help='Treat more registers as 32-bits for older ASL',
+                        action = 'store_true')
     args = parser.parse_args()
+
+    if args.older32:
+        regs32.extend(olderregs32)
 
     # read all the registers
     regs = {}
