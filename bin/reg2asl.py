@@ -272,6 +272,7 @@ def main():
                             for f,ss in regs[name][2].items():
                                 if f not in fields:
                                     fields[f] = ss
+                            length = max(length, regs[name][1])
                         regs[name] = (long, length, fields, bounds)
 
     # Read proprietary notice
