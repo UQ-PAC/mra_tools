@@ -122,6 +122,7 @@ def readDiagram(d, nm):
     # For T32, fields might be given for two half-words separately
     # (both with indices in 15..0)
     hw1 = True if isa == "T32" else False
+    guards = []
     for l in d:
         l = re.sub(r'\s*//.*', "", l)
         l = re.sub(r'\s+', " ", l)
@@ -151,12 +152,18 @@ def readDiagram(d, nm):
             lo = lo + 16
             hi = hi + 16
 
+        negate_content = False
+
         if len(bits) == 2 and re.match("[01x!()]+$", bits[1]):
             name    = '_'
             content = bits[1]
         elif len(bits) == 3 and re.match("[01x!()]+$", bits[2]):
             name    = bits[1]
             content = bits[2]
+        elif len(bits) == 4 and bits[2] == '!=' and re.match("[01x!()]+$", bits[3]):
+            name    = bits[1]
+            content = bits[3]
+            negate_content = True
         elif len(bits) == 2:
             name    = bits[1]
             content = 'x' * wd
@@ -165,6 +172,9 @@ def readDiagram(d, nm):
             exit(1)
 
         content = content.replace("!0", "x").replace("!1", "x")
+        if negate_content:
+            guards.append(name + ' != ' + content)
+            content = 'x' * wd
         data = list(content.replace("(","").replace(")",""))
         assert(len(data) == wd)
 
@@ -187,7 +197,9 @@ def readDiagram(d, nm):
         print ("Missing opcode bits for " + nm + ": " + mask)
         exit(1)
 
-    guard = "cond != '1111'" if isa != "A64" and "cond" in fields else "TRUE"
+    if isa != "A64" and "cond" in fields:
+        guards.append("cond != '1111'")
+    guard = " && ".join(guards) if len(guards) > 0 else "TRUE"
 
     return (isa, mask, unpreds, fields, guard)
 
