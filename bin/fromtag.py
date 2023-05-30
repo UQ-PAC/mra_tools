@@ -173,7 +173,7 @@ def readDiagram(d, nm):
 
         content = content.replace("!0", "x").replace("!1", "x")
         if negate_content:
-            guards.append(name + ' != ' + content)
+            guards.append(name + ' != \'' + content + '\'')
             content = 'x' * wd
         data = list(content.replace("(","").replace(")",""))
         assert(len(data) == wd)
