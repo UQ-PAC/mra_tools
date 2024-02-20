@@ -198,12 +198,142 @@ olderregs32 = [
     "CCTLR_EL3",
     ]
 
+# Collapse secure/non-secure registers into a single definition
+# We currently don't have definitions for the two variants, not sure where to pull this from
+regsSecure = [
+    'ICC_BPR1_EL1',
+    'ICC_SRE_EL1',
+    'ICC_AP1R_EL1',
+    'ICC_IGRPEN1_EL1',
+    'ICC_CTLR_EL1',
+]
+
+# Cases with syntatic issues, ignore for now
+problematic = [
+    'AMEVTYPER1_EL0', 
+    'AMEVCNTR0_EL0',
+    'AMEVCNTR1_EL0'
+]
+
+def parseBin(s):
+    res = re.match('0b([01x]+)(.*)', s)
+    if res:
+        return (res[1], res[2])
+    return None
+
+def parseBit(s):
+    res = re.match('([^\[])*\[(\d+)](.*)', s)
+    if res:
+        return ("x", res[3])
+    return None
+
+def parseRange(s):
+    res = re.match('([^\[])*\[(\d+):(\d+)\](.*)', s)
+    if res:
+        width = int(res[2]) - int(res[3]) + 1
+        return ("x" * width, res[4])
+    return None
+
+def parsePattern(s):
+    out = ""
+    fns = [parseBin, parseBit, parseRange]
+    while len(s) > 0:
+        if s[0] == ":":
+            s = s[1:]
+        match = False
+        for f in fns:
+            m = f(s)
+            if m:
+                out += m[0]
+                s = m[1]
+                match = True
+                break
+        if not match:
+            print("Failed to match pattern: " + s)
+            return None
+    return out
+
+# Pulled from instrs2asl.py, patching the slice format
+def patchSlices(x):
+    reIndex = r'[0-9a-zA-Z_+*:\-()[\]., ]+'
+    rePart = reIndex
+    reParts = rePart+"(,"+rePart+")*"
+    x = re.sub("<("+reParts+")>", r'[\1]',x)
+    x = re.sub("<("+reParts+")>", r'[\1]',x)
+    x = re.sub("<("+reParts+")>", r'[\1]',x)
+    x = re.sub("<("+reParts+")>", r'[\1]',x)
+    return x
+
+# Access mechanisms refer to an arbitrary register t, however,
+# the ASL specification expects to pass in and extract an arbitrary value.
+# Patch the reads and writes to register t with the value.
+def patchIO(x):
+    x = x.replace(" X[t, 64] = ", " return ")
+    x = x.replace("X[t]", "val")
+    return x
+
+# Some registers appear to be duplicated into secure and non-secure forms.
+# However, only a single instance is currently created.
+# For now, simply alias the two.
+def patchSecureRegisters(x):
+    for r in regsSecure:
+        x = x.replace(r + '_S', r)
+        x = x.replace(r + '_NS', r)
+    return x
+
+# Pad reads and slice writes when accessing registers in the regs32 array.
+# Fortunately, these accesses are generally trivial and can be easily modified.
+def patchRegisterWidths(x):
+    for r in regs32:
+        x = x.replace('return ' + r + ';', 'return Zeros(32):' + r + ';')
+        x = x.replace(' ' + r + ' = val;', ' ' + r + ' = val[31:0];')
+    return x
+
+# SysReg definitions use a function to test for implementation features.
+# Rewrite into an access to IMPLEMENTATION_DEFINED flags.
+def patchFeatureImpl(x):
+    x = re.sub("IsFeatureImplemented\((\"[^\)]*\")\)", r'boolean IMPLEMENTATION_DEFINED \1', x)
+    return x
+
+def patchAll(x):
+    x = patchSlices(x)
+    x = patchIO(x)
+    x = patchSecureRegisters(x)
+    x = patchRegisterWidths(x)
+    x = patchFeatureImpl(x)
+    return x
+
+def readName(n):
+    n = n.replace('<','')
+    n = n.replace('>','')
+    return n + '_reg_read'
+
+def readDecl(n):
+    return "bits(64) " +  readName(n) + '(integer op0, integer op1, integer CRn, integer CRm, integer op2)'
+
+def readCall(n):
+    return readName(n) + '(op0, op1, CRn, CRm, op2)'
+
+def writeName(n):
+    n = n.replace('<','')
+    n = n.replace('>','')
+    return n + '_reg_write'
+
+def writeDecl(n):
+    return writeName(n) + '(integer op0, integer op1, integer CRn, integer CRm, integer op2, bits(64) val)'
+
+def writeCall(n):
+    return writeName(n) + '(op0, op1, CRn, CRm, op2, val[63:0])'
+
+sysRegRead = []
+sysRegWrite = []
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--verbose', '-v', help='Use verbose output',
                         action = 'store_true')
-    parser.add_argument('--output',  '-o', help='File to store tag output',
-                        metavar='FILE', default='output')
+    parser.add_argument('--output', '-o', help='Basename for output files',
+                        metavar='FILE', default='regs')
     parser.add_argument('dir', metavar='<dir>',  nargs='+',
                         help='input directory')
     parser.add_argument('--older32', help='Treat more registers as 32-bits for older ASL',
@@ -217,6 +347,7 @@ def main():
     regs = {}
     for d in args.dir:
         for f in glob.glob(os.path.join(d, '*.xml')):
+            filename = f
             xml = ET.parse(f)
             for r in xml.iter('register'):
                 if r.attrib['is_register'] == 'True':
@@ -280,6 +411,21 @@ def main():
                                 # print(name,nm)
                                 pass
 
+                    a = r.find('access_mechanisms')
+                    if a:
+                        for mech in a.findall('access_mechanism'):
+                            if 'accessor' in mech.attrib:
+                                accname = mech.attrib['accessor']
+                                if accname.startswith("MRS "):
+                                    tests = { enc.attrib['n']: enc.attrib['v'] for enc in mech.findall('encoding/enc')}
+                                    body = mech.findall('access_permission/ps/pstext')
+                                    if not name in problematic:
+                                        sysRegRead.append((name,tests,body[0].text))
+                                elif accname.startswith("MSRregister "):
+                                    tests = { enc.attrib['n']: enc.attrib['v'] for enc in mech.findall('encoding/enc')}
+                                    body = mech.findall('access_permission/ps/pstext')
+                                    sysRegWrite.append((name,tests,body[0].text))
+
                     for f in slices.keys():
                         # If another field element gave a rangeset then we don't need name-based slices
                         if f in fields: continue
@@ -312,8 +458,11 @@ def main():
         lines = para.split('\n')
         notice.extend(lines)
 
+    regfile = args.output + ".asl"
+    accfile = args.output + "_access.asl"
+
     # Generate file of definitions
-    with open(args.output, "w") as f:
+    with open(regfile, "w") as f:
         print('/'*72, file=f)
         for p in notice:
             print('// '+p, file=f)
@@ -330,6 +479,53 @@ def main():
             print("//", long, file=f)
             print(prefix+type+' '+name+";", file=f)
             print(file=f)
+
+
+    # Generate file of accessors
+    with open(accfile, "w") as f:
+        for (name, _, ps) in sysRegRead:
+            print(readDecl(name), file=f)
+            for l in ps.split('\n'):
+                print('    ' + patchAll(l), file=f)
+            print('', file=f)
+
+        for (name, _, ps) in sysRegWrite:
+            print(writeDecl(name), file=f)
+            for l in ps.split('\n'):
+                print('    ' + patchAll(l), file=f)
+            print('', file=f)
+
+        print("bits(64) AArch64.SysRegRead(integer op0, integer op1, integer CRn, integer CRm, integer op2)", file=f)
+        print('    case op0[0:0]:op1[2:0]:CRn[3:0]:CRm[3:0]:op2[2:0] of', file=f)
+        for (name, tests, ps) in sysRegRead:
+            op0 = parsePattern(tests['op0'])
+            op1 = parsePattern(tests['op1'])
+            crn = parsePattern(tests['CRn'])
+            crm = parsePattern(tests['CRm'])
+            op2 = parsePattern(tests['op2'])
+            if op0 and op1 and crn and crm and op2:
+                assert(op0[0] == '1')
+                print('        when \'' + op0[1] + op1 + crn + crm + op2 + '\' return ' + readCall(name) + ';', file=f)
+            else:
+                print("Failed to construct pattern for: " + name + " " + str(tests))
+        print('        otherwise Unreachable();', file=f)
+        print('', file=f)
+
+        print("AArch64.SysRegWrite(integer op0, integer op1, integer CRn, integer CRm, integer op2, bit(64) val)", file=f)
+        print('    case op0[0:0]:op1[2:0]:CRn[3:0]:CRm[3:0]:op2[2:0] of', file=f)
+        for (name, tests, ps) in sysRegWrite:
+            op0 = parsePattern(tests['op0'])
+            op1 = parsePattern(tests['op1'])
+            crn = parsePattern(tests['CRn'])
+            crm = parsePattern(tests['CRm'])
+            op2 = parsePattern(tests['op2'])
+            if op0 and op1 and crn and crm and op2:
+                assert(op0[0] == '1')
+                print('        when \'' + op0[1] + op1 + crn + crm + op2 + '\' ' + writeCall(name) + ';', file=f)
+            else:
+                print("Failed to construct pattern for: " + name + " " + str(tests))
+        print('        otherwise Unreachable();', file=f)
+
     return
 
 
