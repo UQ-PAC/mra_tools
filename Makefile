@@ -14,7 +14,7 @@ FILTER =
 
 arch/regs.asl arch/regs_access.asl: ${SYSREG}
 	mkdir -p arch
-	bin/reg2asl.py $< -o arch/regs
+	bin/reg2asl.py $< -o arch/regs --older32
 
 arch/arch.asl arch/arch.tag arch/arch_instrs.asl arch/arch_decode.asl: ${A32} ${A64}
 	mkdir -p arch
