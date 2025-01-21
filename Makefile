@@ -1,8 +1,8 @@
 .PHONY: default
 default: all
 
-VERSION = v86A-2019-12
-XMLDIR  = v8.6
+VERSION = A_profile-2024-12
+XMLDIR  = v9.6
 
 A64    = ${XMLDIR}/ISA_A64_xml_${VERSION}
 A32    = ${XMLDIR}/ISA_AArch32_xml_${VERSION}
@@ -21,6 +21,11 @@ arch/arch.asl arch/arch.tag arch/arch_instrs.asl arch/arch_decode.asl: ${A32} ${
 	bin/instrs2asl.py --altslicesyntax --demangle --verbose -oarch/arch $^ ${FILTER}
 	patch -Np0 < arch.patch
 
+boop: ${A32} ${A64} biasm.json
+	mkdir -p biasm
+	bin/asmtemplate.py ${A64} biasm/out
+
+
 ASL += prelude.asl
 ASL += regs.asl
 ASL += arch.asl
@@ -38,7 +43,7 @@ all :: arch/regs.asl
 all :: arch/arch.asl
 
 clean ::
-	$(RM) -r arch
+	$(RM) -rf arch biasm
 
 # Assumes that patched/* contains a manually fixed version of arch/*
 arch.patch ::

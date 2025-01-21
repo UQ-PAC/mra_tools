@@ -1,0 +1,11 @@
+{
+    "instructions": [
+        ".*dp(reg|imm).add.*"
+    ],
+    "roots": [
+    ],
+    "cuts": [
+    ],
+    "canaries": [
+    ]
+}

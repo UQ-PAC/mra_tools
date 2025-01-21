@@ -14,3 +14,7 @@ arch.tag
 
 # Python files
 __pycache__
+
+arch
+biasm
+/v?.?

@@ -229,7 +229,7 @@ class Instruction:
 
     def __str__(self):
         encs = "["+ ", ".join([inm for (inm,_,_,_) in self.encs]) +"]"
-        return "Instruction{" + ", ".join([encs, (self.post.name if self.post else "-"), self.exec.name])+", "+conditional+"}"
+        return "Instruction{" + ", ".join([encs, (self.post.name if self.post else "-"), self.exec.name])+", "+str(self.conditional)+"}" + "\n" + str(self.encs)
 
 
 ########################################################################
@@ -913,6 +913,8 @@ def main():
         print(notice, file=outf)
         print(file=outf)
         for i in instrs:
+            i: Instruction = i
+            print(i)
             i.emit_asl_syntax(outf)
             print(file=outf)
         print('/'*72, file=outf)
